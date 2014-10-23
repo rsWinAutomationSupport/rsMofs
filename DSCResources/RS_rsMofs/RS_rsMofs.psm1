@@ -118,7 +118,12 @@ function Set-TargetResource
 
     # Remove mof & Checksums that do not exist
     $exclusions = $results.id | % { "*",($_,"mof" -join "."),"*" -join '';"*",($_,"mof.checksum" -join "."),"*" -join ''}
-    Get-ChildItem $mofFolder -Exclude $exclusions | Remove-Item -force
+    if($exclusions){
+        Get-ChildItem $mofFolder -Exclude $exclusions | Remove-Item -force
+    }
+    else {
+        Get-ChildItem $mofFolder | Remove-Item -force
+    }
 
     # Get Client Configs except for PullServer
     $configs = ($results | ? rax_dsc_config -ne $PullServerConfig).rax_dsc_config | Sort -Unique
