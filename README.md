@@ -10,3 +10,6 @@ rsMofs My
     Ensure = "Present"
 }
 ```
+DedicatedKey is the Key Value in the dedicated.csv file that represents the configuration file to use.
+CloudKey is the Key Value that is in the metadata on a cloud server that represents the configuration file to use.
+PullServerConfig is the configuration name of the Pull Server to exclude from creating mof's.
