@@ -118,7 +118,7 @@ function Set-TargetResource
 
     # Remove mof & Checksums that do not exist
     $exclusions = $results.id | % { "*",($_,"mof" -join "."),"*" -join '';"*",($_,"mof.checksum" -join "."),"*" -join ''}
-    if($exclusions){
+    if(Get-ChildItem $mofFolder -Exclude $exclusions){
         Get-ChildItem $mofFolder -Exclude $exclusions | Remove-Item -force
     }
     else {
