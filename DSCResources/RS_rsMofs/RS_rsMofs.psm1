@@ -98,6 +98,7 @@ function Set-TargetResource
         [String]$PullServerConfig,
         [ValidateSet("Present", "Absent")][string]$Ensure = "Present"
     )
+    Import-Module rsCommon
     $logSource = $($PSCmdlet.MyInvocation.MyCommand.ModuleName)
     New-rsEventLogSource -logSource $logSource
     . (Get-rsSecrets)
@@ -158,15 +159,10 @@ function Test-TargetResource
         [String]$PullServerConfig,
         [ValidateSet("Present", "Absent")][string]$Ensure = "Present"
     )
+    Import-Module rsCommon
     $testresult = $true
     $mofFolder = "C:\Program Files\WindowsPowerShell\DscService\Configuration"
     $logSource = $($PSCmdlet.MyInvocation.MyCommand.ModuleName)
-    $exists = Import-Module rsCommon -ErrorAction SilentlyContinue -PassThru
-    if( [string]::IsNullOrEmpty($exists) )
-    {
-        Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1003 -Message "rsCommon is not located on this machine"
-        Throw "rsCommon is not located on this machine"
-    }
     New-rsEventLogSource -logSource $logSource
     . (Get-rsSecrets)
     if($d.ContainsKey("rs_username") -and $d.ContainsKey("rs_apikey") ){
