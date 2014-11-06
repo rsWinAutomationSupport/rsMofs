@@ -55,9 +55,9 @@ Function Set-rsMof
     [String] $config
     )
     Remove-rsMof -id $id
-    if(Test-Path $($d.wD,$d.mR,$config -join'\') ) {
+    if(Test-Path $("C:\DevOps",$d.mR,$config -join'\') ) {
         try{
-            Invoke-Expression "$($d.wD, $d.mR, $config -join '\') -Node $name -ObjectGuid $id -MonitoringID $([guid]::NewGuid()) -MonitoringToken $([guid]::NewGuid())"
+            Invoke-Expression "$("C:\DevOps", $d.mR, $config -join '\') -Node $name -ObjectGuid $id -MonitoringID $([guid]::NewGuid()) -MonitoringToken $([guid]::NewGuid())"
         }
         catch {
             Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "Error creating mof for $name using $config `n$($_.Exception.message)"
@@ -104,17 +104,18 @@ function Set-TargetResource
 
     $mofFolder = "C:\Program Files\WindowsPowerShell\DscService\Configuration"
     # List All Cloud Servers using Heat metadata
-    if($d.ContainsKey("cU") -and $d.ContainsKey("cAPI") ){
+    if($d.ContainsKey("rs_username") -and $d.ContainsKey("rs_apikey") ){
         $cloudresults = Get-rsDetailsServers | ? {$_.metadata -match $CloudKey} | Select -Property name,id -ExpandProperty metadata | Select name,id,@{Name="rax_dsc_config";Expression=$CloudKey}
     }
     # List All Dedicated Servers
-    if(Test-Path $($d.wD,$d.mR,"dedicated.csv" -join '\')){
-        $dedicatedresults = Import-Csv -Path $($d.wD,$d.mR,"dedicated.csv" -join '\') | Select name,id,@{Name="rax_dsc_config";Expression=$DedicatedKey}
+    if(Test-Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\')){
+        $dedicatedresults = Import-Csv -Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\') | Select name,id,@{Name="rax_dsc_config";Expression=$DedicatedKey}
     }
     # Combine results
     $results = @()
     $results += $cloudresults
     $results += $dedicatedresults
+    $results = ($results | ? rax_dsc_config -ne $PullServerConfig)
 
     # Remove mof & Checksums that do not exist
     $exclusions = $results.id | % { "*",($_,"mof" -join "."),"*" -join '';"*",($_,"mof.checksum" -join "."),"*" -join ''}
@@ -126,16 +127,16 @@ function Set-TargetResource
     }
 
     # Get Client Configs except for PullServer
-    $configs = ($results | ? rax_dsc_config -ne $PullServerConfig).rax_dsc_config | Sort -Unique
+    $configs = $results.rax_dsc_config | Sort -Unique
     # If Client Config Updated, Remove Mof
     foreach( $config in $configs )
     {
-        if( !(Test-rsHash $($d.wD,$d.mR,$config -join'\') $($d.wD,$($config,'hash' -join '.') -join'\')) )
+        if( !(Test-rsHash $("C:\DevOps",$d.mR,$config -join'\') $("C:\DevOps",$($config,'hash' -join '.') -join'\')) )
         {
             foreach( $server in $($results | ? rax_dsc_config -eq $config) ){
                 Remove-rsMof -id $($server.id)
             }
-            Set-rsHash $($d.wD,$d.mR,$config -join'\') $($d.wD,$($config,'hash' -join '.') -join'\')
+            Set-rsHash $("C:\DevOps",$d.mR,$config -join'\') $("C:\DevOps",$($config,'hash' -join '.') -join'\')
         }
     }
     # Create Missing
@@ -169,24 +170,25 @@ function Test-TargetResource
     }
     New-rsEventLogSource -logSource $logSource
     . (Get-rsSecrets)
-    if($d.ContainsKey("cU") -and $d.ContainsKey("cAPI") ){
+    if($d.ContainsKey("rs_username") -and $d.ContainsKey("rs_apikey") ){
         $cloudresults = Get-rsDetailsServers | ? {$_.metadata -match $CloudKey} | Select -Property name,id -ExpandProperty metadata | Select name,id,@{Name="rax_dsc_config";Expression=$CloudKey}
     }
-    if(Test-Path $($d.wD,$d.mR,"dedicated.csv" -join '\')){
-        $dedicatedresults = Import-Csv -Path $($d.wD,$d.mR,"dedicated.csv" -join '\') | Select name,id,@{Name="rax_dsc_config";Expression=$DedicatedKey}
+    if(Test-Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\')){
+        $dedicatedresults = Import-Csv -Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\') | Select name,id,@{Name="rax_dsc_config";Expression=$DedicatedKey}
     }
     $results = @()
     $results += $cloudresults
     $results += $dedicatedresults
+    $results = ($results | ? rax_dsc_config -ne $PullServerConfig)
     
     if($results.id.count -ne (((Get-ChildItem $mofFolder).count)/2)){
         $testresult = $false
     }
 
-    $configs = ($results | ? rax_dsc_config -ne $PullServerConfig).rax_dsc_config | Sort -Unique
+    $configs = $results.rax_dsc_config | Sort -Unique
     foreach( $config in $configs )
     {
-        if( !(Test-rsHash $($d.wD,$d.mR,$config -join'\') $($d.wD,$($config,'hash' -join '.') -join'\')) )
+        if( !(Test-rsHash $("C:\DevOps",$d.mR,$config -join'\') $("C:\DevOps",$($config,'hash' -join '.') -join'\')) )
         {
             $testresult = $false
         }
