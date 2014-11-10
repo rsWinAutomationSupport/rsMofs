@@ -139,12 +139,12 @@ function Set-TargetResource
          }
          Set-rsHash $("C:\DevOps",$d.mR,$config -join'\') $("C:\DevOps",$($config,'hash' -join '.') -join'\')
       }
-      # Create Missing
-      foreach( $server in $($results | ? rax_dsc_config -eq $config) ){
-         if( !(Test-Path $(($mofFolder,$($server.id) -join '\'),'mof' -join '.')) -or !(Test-Path $(($mofFolder,$($server.id) -join '\'),'mof.checksum' -join '.')) )
-         {
-            Set-rsMof -name $($server.name) -id $($server.id) -config $config
-         }
+   }
+   # Create Missing
+   foreach( $server in $results ){
+      if( !(Test-Path $(($mofFolder,$($server.id) -join '\'),'mof' -join '.')) -or !(Test-Path $(($mofFolder,$($server.id) -join '\'),'mof.checksum' -join '.')) )
+      {
+         Set-rsMof -name $($server.name) -id $($server.id) -config $config
       }
    }
 }
@@ -189,7 +189,7 @@ function Test-TargetResource
          $testresult = $false
       }
    }
-   foreach( $server in $($results | ? rax_dsc_config -eq $config) ){
+   foreach( $server in $results ){
       if( !(Test-Path $(($mofFolder,$($server.id) -join '\'),'mof' -join '.')) -or !(Test-Path $(($mofFolder,$($server.id) -join '\'),'mof.checksum' -join '.')) )
       {
          $testresult = $false
