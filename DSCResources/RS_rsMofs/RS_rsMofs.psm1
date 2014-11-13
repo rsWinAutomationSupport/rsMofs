@@ -144,7 +144,7 @@ function Set-TargetResource
    foreach( $server in $results ){
       if( !(Test-Path $(($mofFolder,$($server.id) -join '\'),'mof' -join '.')) -or !(Test-Path $(($mofFolder,$($server.id) -join '\'),'mof.checksum' -join '.')) )
       {
-         Set-rsMof -name $($server.name) -id $($server.id) -config $config
+         Set-rsMof -name $($server.name) -id $($server.id) -config $($server.rax_dsc_config)
       }
    }
 }
