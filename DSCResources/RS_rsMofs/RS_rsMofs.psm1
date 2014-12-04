@@ -81,7 +81,7 @@ function Get-TargetResource
    @{
         Name = $Name
         DedicatedKey = $DedicatedKey
-        CoudKey = $CloudKey
+        CloudKey = $CloudKey
         PullServerConfig = $PullServerConfig
         Ensure = $Ensure
     } 
