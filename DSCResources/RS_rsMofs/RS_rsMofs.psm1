@@ -57,7 +57,7 @@ Function Set-rsMof
    Remove-rsMof -id $id
    if(Test-Path $("C:\DevOps",$d.mR,$config -join'\') ) {
       try{
-         Invoke-Expression "$("C:\DevOps", $d.mR, $config -join '\') -Node $name -ObjectGuid $id -MonitoringID $([guid]::NewGuid()) -MonitoringToken $([guid]::NewGuid())"
+         Invoke-Expression "$('C:\DevOps', $d.mR, $config -join '\') -Node $name -ObjectGuid $id -MonitoringID $([guid]::NewGuid()) -MonitoringToken $([guid]::NewGuid())"
       }
       catch {
          Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "Error creating mof for $name using $config `n$($_.Exception.message)"
@@ -104,18 +104,20 @@ function Set-TargetResource
    . (Get-rsSecrets)
    
    $mofFolder = "C:\Program Files\WindowsPowerShell\DscService\Configuration"
+   $results = @()
    # List All Cloud Servers using Heat metadata
-   if($d.ContainsKey("rs_username") -and $d.ContainsKey("rs_apikey") ){
-      $cloudresults = Get-rsDetailsServers | ? {$_.metadata -match $CloudKey} | Select -Property name,id -ExpandProperty metadata | Select name,id,@{Name="rax_dsc_config";Expression=$CloudKey}
+   if( $psBoundParameters.ContainsKey('CloudKey') ){
+      $results = Get-rsDetailsServers | ? {$_.metadata -match $CloudKey} | Select -Property name,id -ExpandProperty metadata | Select name,id,@{Name="rax_dsc_config";Expression=$CloudKey}
    }
    # List All Dedicated Servers
-   if(Test-Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\')){
-      $dedicatedresults = Import-Csv -Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\') | Select name,id,@{Name="rax_dsc_config";Expression=$DedicatedKey}
+   if( $psBoundParameters.ContainsKey('DedicatedKey') ){   
+       if(Test-Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\')){
+          $results = Import-Csv -Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\') | Select name,id,@{Name="rax_dsc_config";Expression=$DedicatedKey}
+       }
+       else {
+          Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "The file dedicated.csv does not exist. Remove DedicatedKey value from DSC Module or make sure file exists."
+       }
    }
-   # Combine results
-   $results = @()
-   $results += $cloudresults
-   $results += $dedicatedresults
    $results = ($results | ? rax_dsc_config -ne $PullServerConfig)
    
    # Remove mof & Checksums that do not exist
@@ -166,15 +168,20 @@ function Test-TargetResource
    $logSource = $($PSCmdlet.MyInvocation.MyCommand.ModuleName)
    New-rsEventLogSource -logSource $logSource
    . (Get-rsSecrets)
-   if($d.ContainsKey("rs_username") -and $d.ContainsKey("rs_apikey") ){
-      $cloudresults = Get-rsDetailsServers | ? {$_.metadata -match $CloudKey} | Select -Property name,id -ExpandProperty metadata | Select name,id,@{Name="rax_dsc_config";Expression=$CloudKey}
-   }
-   if(Test-Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\')){
-      $dedicatedresults = Import-Csv -Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\') | Select name,id,@{Name="rax_dsc_config";Expression=$DedicatedKey}
-   }
    $results = @()
-   $results += $cloudresults
-   $results += $dedicatedresults
+   # List All Cloud Servers using Heat metadata
+   if( $psBoundParameters.ContainsKey('CloudKey') ){
+      $results = Get-rsDetailsServers | ? {$_.metadata -match $CloudKey} | Select -Property name,id -ExpandProperty metadata | Select name,id,@{Name="rax_dsc_config";Expression=$CloudKey}
+   }
+   # List All Dedicated Servers
+   if( $psBoundParameters.ContainsKey('DedicatedKey') ){   
+       if(Test-Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\')){
+          $results = Import-Csv -Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\') | Select name,id,@{Name="rax_dsc_config";Expression=$DedicatedKey}
+       }
+       else {
+          Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "The file dedicated.csv does not exist. Remove DedicatedKey value from DSC Module or make sure file exists."
+       }
+   }
    $results = ($results | ? rax_dsc_config -ne $PullServerConfig)
    
    if($results.id.count -ne (((Get-ChildItem $mofFolder).count)/2)){
