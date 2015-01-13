@@ -112,7 +112,7 @@ function Set-TargetResource
    # List All Dedicated Servers
    if( $psBoundParameters.ContainsKey('DedicatedKey') ){   
        if(Test-Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\')){
-          $results = Import-Csv -Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\') | Select name,id,@{Name="rax_dsc_config";Expression=$DedicatedKey}
+          $results += Import-Csv -Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\') | Select name,id,@{Name="rax_dsc_config";Expression=$DedicatedKey}
        }
        else {
           Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "The file dedicated.csv does not exist. Remove DedicatedKey value from DSC Module or make sure file exists."
@@ -176,7 +176,7 @@ function Test-TargetResource
    # List All Dedicated Servers
    if( $psBoundParameters.ContainsKey('DedicatedKey') ){   
        if(Test-Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\')){
-          $results = Import-Csv -Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\') | Select name,id,@{Name="rax_dsc_config";Expression=$DedicatedKey}
+          $results += Import-Csv -Path $("C:\DevOps",$d.mR,"dedicated.csv" -join '\') | Select name,id,@{Name="rax_dsc_config";Expression=$DedicatedKey}
        }
        else {
           Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "The file dedicated.csv does not exist. Remove DedicatedKey value from DSC Module or make sure file exists."
