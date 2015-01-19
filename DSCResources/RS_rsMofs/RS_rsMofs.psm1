@@ -107,7 +107,7 @@ function Set-TargetResource
    $results = @()
    # List All Cloud Servers using Heat metadata
    if( $psBoundParameters.ContainsKey('CloudKey') ){
-      $results = Get-rsDetailsServers | ? {$_.metadata -match $CloudKey} | Select -Property name,id -ExpandProperty metadata | Select name,id,@{Name="rax_dsc_config";Expression=$CloudKey}
+      $results += Get-rsDetailsServers | ? {$_.metadata -match $CloudKey} | Select -Property name,id -ExpandProperty metadata | Select name,id,@{Name="rax_dsc_config";Expression=$CloudKey}
    }
    # List All Dedicated Servers
    if( $psBoundParameters.ContainsKey('DedicatedKey') ){   
@@ -171,7 +171,7 @@ function Test-TargetResource
    $results = @()
    # List All Cloud Servers using Heat metadata
    if( $psBoundParameters.ContainsKey('CloudKey') ){
-      $results = Get-rsDetailsServers | ? {$_.metadata -match $CloudKey} | Select -Property name,id -ExpandProperty metadata | Select name,id,@{Name="rax_dsc_config";Expression=$CloudKey}
+      $results += Get-rsDetailsServers | ? {$_.metadata -match $CloudKey} | Select -Property name,id -ExpandProperty metadata | Select name,id,@{Name="rax_dsc_config";Expression=$CloudKey}
    }
    # List All Dedicated Servers
    if( $psBoundParameters.ContainsKey('DedicatedKey') ){   
