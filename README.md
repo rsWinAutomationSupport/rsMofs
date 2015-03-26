@@ -1,12 +1,11 @@
 rsMofs
 ======
+
 ```Posh
-rsMofs My
+rsMofs MyMofs
 {
-    Name = "MyMofs"
-    DedicatedKey = "rax_dsc_config"
-    CloudKey = "rax_dsc_config"
-    PullServerConfig = "rsPullServer.ps1"
+    nodeData = "C:\DevOps\DDI_rsConfigs\nodes.json"
+    configPath = "C:\DevOps\DDI_rsConfigs\"
     Ensure = "Present"
 }
 ```
