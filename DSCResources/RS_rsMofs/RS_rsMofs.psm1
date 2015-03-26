@@ -1,56 +1,89 @@
-﻿Function Remove-rsMof
+﻿Function TestHash
 {
-    param( [String] $id, [String] $DestinationPath )
-    if( (Test-Path $((Join-Path $DestinationPath $id),'mof' -join '.')) ){
-        Remove-Item $((Join-Path $DestinationPath $id),'mof' -join '.') -Force -ErrorAction SilentlyContinue
-    }
-    if( (Test-Path $((Join-Path $DestinationPath $id),'mof.checksum' -join '.')) ){
-        Remove-Item $((Join-Path $DestinationPath $id),'mof.checksum' -join '.') -Force -ErrorAction SilentlyContinue
-    }
-}
-Function Set-rsMof
-{
-    param(
-        [String] $name,
-        [String] $id,
-        [String] $config,
-        [String] $ConfigPath,
-        [String] $DestinationPath
+    [CmdletBinding()]
+    param (
+        [String] $file,
+        [String] $hash
     )
-    Remove-rsMof -id $id -DestinationPath $DestinationPath
-    if(Test-Path $(Join-Path $ConfigPath $config) ) 
-    {
-        try
-        {
-            Invoke-Expression "& `'$(Join-Path $ConfigPath $config)`' -Node $name -ObjectGuid $id -DestinationPath `"$DestinationPath`"" -Verbose
-        }
-        catch 
-        {
-            Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "Error creating mof for $name using $config `n$($_.Exception.message)"
-            Write-Verbose "Error creating mof for $name using $config `n$($_.Exception.message)"
-        }
+    if ( !(Test-Path $hash) ){
+        return $false
     }
-    else 
-    {
-        Write-Verbose "$config does not exist"
+    if( (Get-FileHash $file).hash -eq (Import-Csv $hash).hash){
+        return $true
+    }
+    if( (Get-FileHash $file).hash -eq (Import-Csv $hash)){
+        return $true
+    }
+    else {
+        return $false
     }
 }
+
+function ReadNodeData
+{
+     [CmdletBinding()]
+     param (
+          [string]$NodeData
+     )
+
+     if(Test-Path $NodeData)
+     {
+          return (Get-Content $NodeData) -join "`n" | ConvertFrom-Json
+     }
+     else
+     {
+          Write-Verbose "The file path $NodeData does not exist."
+          Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "The file path $NodeData does not exist."
+     }
+}
+
+function RemoveMof
+{
+    [CmdletBinding()]
+    param (
+        [String] $uuid,
+        [String] $MofPath
+    )
+
+    $MofFile = (($MofPath,$uuid -join '\'),'mof' -join '.')
+    $MofFileHash = ($MofFile,'checksum' -join '.')
+    
+    if( Test-Path $MofFile )
+    {
+        Remove-Item $MofFile -Force -ErrorAction SilentlyContinue
+    }
+    
+    if( Test-Path $MofFileHash )
+    {
+        Remove-Item $MofFileHash -Force -ErrorAction SilentlyContinue
+    }
+}
+
 function Get-TargetResource
 {
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
-        [String]$Name,
-        [String]$DedicatedKey,
-        [String]$PullServerConfig,
+        [string]$nodeData,
+        [string]$mofDestPath = "C:\Program Files\WindowsPowerShell\DscService\Configuration",
+        [string]$configPath = "C:\DevOps\DDI_rsConfigs",
+        [string]$configHashPath,
+        [string]$pullConfig = "rsPullServer.ps1",
         [ValidateSet("Present", "Absent")][string]$Ensure = "Present"
     )
+    
+    if (!($configHashPath))
+    {
+        $confHash = $configPath
+    }
+
     @{
-        Name = $Name
-        DedicatedKey = $DedicatedKey
-        PullServerConfig = $PullServerConfig
-        Ensure = $Ensure
-    } 
+         nodeData = $nodeData
+         mofDestPath = $mofDestPath
+         configPath = $configPath
+         configHashPath = $configHashPath
+         pullConfig = $pullConfig
+     } 
 }
 
 function Set-TargetResource
@@ -58,62 +91,86 @@ function Set-TargetResource
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
-        [String]$Name,
-        [String]$DedicatedKey,
-        [String]$PullServerConfig,
-        [String]$DestinationPath,
-        [String]$CSVPath,
-        [String]$ConfigPath,
-        [String]$ConfigHashPath,
+        [string]$nodeData,
+        [string]$mofDestPath = "C:\Program Files\WindowsPowerShell\DscService\Configuration",
+        [string]$configPath = "C:\DevOps\DDI_rsConfigs",
+        [string]$configHashPath,
+        [string]$pullConfig = "rsPullServer.ps1",
         [ValidateSet("Present", "Absent")][string]$Ensure = "Present"
     )
+
     Import-Module rsCommon
     $logSource = $($PSCmdlet.MyInvocation.MyCommand.ModuleName)
     New-rsEventLogSource -logSource $logSource
-   
-    $results = @()
-    # List All Dedicated Servers
-    if(Test-Path $CSVPath)
+
+    # Retreive current node data set
+    $allServers = (ReadNodeData -NodeData $nodeData).Nodes
+
+    # Remove mof & checksums that no longer exist in $AllServers
+    $exclusions = $allServers.uuid | ForEach-Object { "*",($_,"mof" -join "."),"*" -join '';"*",($_,"mof.checksum" -join "."),"*" -join ''}
+    $removalList = Get-ChildItem $mofDestPath -Exclude $exclusions
+
+    if( $removalList )
     {
-        $results += Import-Csv -Path $CSVPath | Select name,id,@{Name="rax_dsc_config";Expression=$DedicatedKey}
+        Remove-Item -Include $removalList -force
     }
     else 
     {
-        Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "The file $CSVPath does not exist."
+        Get-ChildItem $mofDestPath | Remove-Item -force
     }
-    $results = ($results | ? rax_dsc_config -ne $PullServerConfig)
-   
-    # Remove mof & Checksums that do not exist
-    $exclusions = $results.id | % { "*",($_,"mof" -join "."),"*" -join '';"*",($_,"mof.checksum" -join "."),"*" -join ''}
-    if(Get-ChildItem $DestinationPath -Exclude $exclusions)
-    {
-        Get-ChildItem $DestinationPath -Exclude $exclusions | Remove-Item -force
-    }
-    else 
-    {
-        Get-ChildItem $DestinationPath | Remove-Item -force
-    }
-   
-    # Get Client Configs except for PullServer
-    $configs = $results.rax_dsc_config | Sort -Unique
-    # If Client Config Updated, Remove Mof
+    
+    # Check configurations for updates by comparing each config file and its hash
+    $configs = ($allServers.dsc_config | Where-Object dsc_config -ne $pullConfig | Sort -Unique)
+    
+    # Remove mof files if the main DSC client config file has been updated and generate new config checksum
     foreach( $config in $configs )
-    {
-        if( !(Test-rsHash $(Join-Path $ConfigPath $config) $(Join-Path $ConfigHashPath $($config,'hash' -join '.'))) )
+    {       
+        $confFile = Join-Path $configPath $config
+        if ($configHashPath)
         {
-            foreach( $server in $($results | ? rax_dsc_config -eq $config) )
+            $confHash = Join-Path $configHashPath $($config,'checksum' -join '.')
+        }
+        else
+        {
+            $confHash = Join-Path $configPath $($config,'checksum' -join '.')
+        }
+
+        if( !(TestHash $confFile $confHash) )
+        {
+            foreach( $server in $($allServers | Where-Object rax_dsc_config -eq $config) )
             {
-                Remove-rsMof -id $($server.id) -DestinationPath $DestinationPath
+                RemoveMof -uuid $($server.uuid) -MofPath $mofDestPath
             }
-            Set-rsHash $(Join-Path $ConfigPath $config) $(Join-Path $ConfigHashPath $($config,'hash' -join '.'))
+
+            Set-Content -Path $confHash -Value (Get-FileHash -Path $confFile | ConvertTo-Csv)
         }
     }
-    # Create Missing
-    foreach( $server in $results )
+
+    # Generate new or replace outdated mof and checksum files
+    foreach( $server in $allServers )
     {
-        if( !(Test-Path $((Join-Path $DestinationPath $($server.id)),'mof' -join '.')) -or !(Test-Path $((Join-Path $DestinationPath $($server.id)),'mof.checksum' -join '.')) )
+        $mofFile = (($mofDestPath,$server.uuid -join '\'),'mof' -join '.')
+        $mofFileHash = ($mofFile,'checksum' -join '.')
+
+        if( !(Test-Path $MofFile) -or !(Test-Path $MofFileHash) )
         {
-            Set-rsMof -name $($server.name) -id $($server.id) -config $($server.rax_dsc_config) -DestinationPath $DestinationPath -ConfigPath $ConfigPath
+            RemoveMof -uuid $($server.uuid) -MofPath $mofDestPath
+            if( Test-Path $confFile )
+            {
+                try
+                {
+                   Invoke-Expression "$($confFile) -Node $($server.NodeName) -Objectuuid $($server.uuid)"
+                }
+                catch 
+                {
+                   Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "Error creating mof for $($server.NodeName) using $confFile `n$($_.Exception.message)"
+                }
+            }
+            else 
+            {
+                Write-Verbose "$confFile was not found. Creation of mof file for $($server.NodeName) has failed."
+                Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1003 -Message "$confFile was not found. Creation of mof file for $($server.NodeName) has failed."
+            }
         }
     }
 }
@@ -123,51 +180,71 @@ function Test-TargetResource
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
-        [String]$Name,
-        [String]$DedicatedKey,
-        [String]$PullServerConfig,
-        [String]$DestinationPath,
-        [String]$CSVPath,
-        [String]$ConfigPath,
-        [String]$ConfigHashPath,
+        [string]$nodeData,
+        [string]$mofDestPath = "C:\Program Files\WindowsPowerShell\DscService\Configuration",
+        [string]$configPath = "C:\DevOps\DDI_rsConfigs",
+        [string]$configHashPath,
+        [string]$pullConfig = "rsPullServer.ps1",
         [ValidateSet("Present", "Absent")][string]$Ensure = "Present"
     )
+    
     Import-Module rsCommon
-    $testresult = $true
     $logSource = $($PSCmdlet.MyInvocation.MyCommand.ModuleName)
     New-rsEventLogSource -logSource $logSource
-    $results = @()
-    # List All Dedicated Servers
-    if(Test-Path $CSVPath)
+    
+    # Retreive current node data
+    $allServers = (ReadNodeData -NodeData $nodeData).Nodes
+    
+    # Check if mof destination file count is equal to the number of nodes in NodeData
+    if($allServers.uuid.count -ne (((Get-ChildItem $mofDestPath).count)/2))
     {
-        $results += Import-Csv -Path $CSVPath | Select name,id,@{Name="rax_dsc_config";Expression=$DedicatedKey}
+        Write-Verbose "Number of nodes in supplied NodeData does not match number of mof or checksum files"
+        return $false
     }
-    else 
-    {
-        Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "The file path $CSVPath does not exist."
-    }
-    $results = ($results | ? rax_dsc_config -ne $PullServerConfig)
-   
-    if($results.id.count -ne (((Get-ChildItem $DestinationPath).count)/2))
-    {
-        $testresult = $false
-    }
-   
-    $configs = $results.rax_dsc_config | Sort -Unique
+    
+    # Check configurations for updates by comparing each config file and its hash
+    $configs = ($allServers.dsc_config | Where-Object dsc_config -ne $pullConfig | Sort -Unique)
+    
     foreach( $config in $configs )
     {
-        if( !(Test-rsHash $(Join-Path $ConfigPath $config) $(Join-Path $ConfigHashPath $($config,'hash' -join '.'))) )
+        $confFile = Join-Path $configPath $config
+        if ($configHashPath)
         {
-            $testresult = $false
+            $confHash = Join-Path $configHashPath $($config,'checksum' -join '.')
+        }
+        else
+        {
+            $confHash = Join-Path $configPath $($config,'checksum' -join '.')
+        }
+        
+
+        if( !(TestHash $confFile $confHash))
+        {
+             Write-Verbose "$confFile hash check failed"
+             return $false
         }
     }
-    foreach( $server in $results )
+    
+    # Check if each node has a mof and checksum present
+    # Then ensure that mof file is valid by comparing with its checksum
+    foreach($node in $allServers)
     {
-        if( !(Test-Path $((Join-Path $DestinationPath $($server.id)),'mof' -join '.')) -or !(Test-Path $((Join-Path $DestinationPath $($server.id)),'mof.checksum' -join '.')) )
+        $nodeMofFile = ((Join-Path $mofDestPath $($node.uuid)),'mof' -join '.')
+        $nodeMofHash = ((Join-Path $mofDestPath $($node.uuid)),'mof.checksum' -join '.')
+
+        if( !(Test-Path $nodeMofFile) -or !(Test-Path $nodeMofHash))
         {
-            $testresult = $false
+            Write-Verbose "$nodeMofFile or its hash file not found"
+            return $false
+        }
+
+        if( !(TestHash -file $nodeMofFile -hash $nodeMofHash))
+        {
+            Write-Verbose "$nodeMofFile hash validaton failed"
+            return $false
         }
     }
-    return $testresult
+    return $true
 }
+
 Export-ModuleMember -Function *-TargetResource
