@@ -74,7 +74,7 @@ function Get-TargetResource
     
     if (!($configHashPath))
     {
-        $confHash = $configPath
+        $configHashPath = $configPath
     }
 
     @{
@@ -107,7 +107,7 @@ function Set-TargetResource
     $allServers = (ReadNodeData -NodeData $nodeData).Nodes
 
     # Remove mof & checksums that no longer exist in $AllServers
-    $exclusions = $allServers.uuid | ForEach-Object { "*",($_,"mof" -join "."),"*" -join '';"*",($_,"mof.checksum" -join "."),"*" -join ''}
+    $exclusions = $allServers.uuid | Where-Object {$_ -match '\.mof$' -or $_ -match '\.checksum$'}
     $removalList = Get-ChildItem $mofDestPath -Exclude $exclusions
 
     if( $removalList )
