@@ -1,27 +1,27 @@
 ﻿Function TestHash
 {
-    [CmdletBinding()]
     param (
         [String] $file,
         [String] $hash
     )
-    if ( !(Test-Path $hash) ){
+    
+    if ( !(Test-Path $hash) -or !(Test-Path $file))
+    {
         return $false
     }
-    if( (Get-FileHash $file).hash -eq (Import-Csv $hash).hash){
+       
+    if( (Get-FileHash $file).hash -eq (Get-Content $hash))
+    {
         return $true
     }
-    if( (Get-FileHash $file).hash -eq (Import-Csv $hash)){
-        return $true
-    }
-    else {
+    else
+    {
         return $false
     }
 }
 
 function ReadNodeData
 {
-     [CmdletBinding()]
      param (
           [string]$NodeData
      )
@@ -33,7 +33,7 @@ function ReadNodeData
      else
      {
           Write-Verbose "The file path $NodeData does not exist."
-          Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "The file path $NodeData does not exist."
+          #Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "The file path $NodeData does not exist."
      }
 }
 
@@ -99,32 +99,33 @@ function Set-TargetResource
         [ValidateSet("Present", "Absent")][string]$Ensure = "Present"
     )
 
-    Import-Module rsCommon
-    $logSource = $($PSCmdlet.MyInvocation.MyCommand.ModuleName)
-    New-rsEventLogSource -logSource $logSource
+    #Import-Module rsCommon
+    #$logsource = "rsMofs"
+    #$logsource = $($PSCmdlet.MyInvocation.MyCommand.ModuleName)
+    #New-rsEventLogSource -logSource $logSource
 
     # Retreive current node data set
     $allServers = (ReadNodeData -NodeData $nodeData).Nodes
 
     # Remove mof & checksums that no longer exist in $AllServers
-    $exclusions = $allServers.uuid | Where-Object {$_ -match '\.mof$' -or $_ -match '\.checksum$'}
+    #
+    # Create an exclusions list with correct format
+    #$exclusions = $allServers.uuid | ForEach-Object { "*",($_,"mof" -join "."),"*" -join '';"*",($_,"mof.checksum" -join "."),"*" -join ''  }
+    $exclusions = $allServers.uuid | ForEach-Object { $_,"mof" -join ".";$_,"mof.checksum" -join "."}
+
     $removalList = Get-ChildItem $mofDestPath -Exclude $exclusions
 
     if( $removalList )
     {
-        Remove-Item -Include $removalList -force
-    }
-    else 
-    {
-        Get-ChildItem $mofDestPath | Remove-Item -force
+        Remove-Item -Path $removalList.FullName -Force
     }
     
     # Check configurations for updates by comparing each config file and its hash
-    $configs = ($allServers.dsc_config | Where-Object dsc_config -ne $pullConfig | Sort -Unique)
+    $configs = ($allServers.dsc_config | Where-Object {$_.dsc_config -ne $pullConfig} | Sort -Unique)
     
     # Remove mof files if the main DSC client config file has been updated and generate new config checksum
     foreach( $config in $configs )
-    {       
+    {
         $confFile = Join-Path $configPath $config
         if ($configHashPath)
         {
@@ -134,43 +135,68 @@ function Set-TargetResource
         {
             $confHash = Join-Path $configPath $($config,'checksum' -join '.')
         }
-
-        if( !(TestHash $confFile $confHash) )
+        
+        if (Test-Path $confFile)
         {
-            foreach( $server in $($allServers | Where-Object rax_dsc_config -eq $config) )
+            if( !(TestHash -file $confFile -hash $confHash) )
             {
-                RemoveMof -uuid $($server.uuid) -MofPath $mofDestPath
-            }
+                Write-Verbose "$confFile has been modified - regenerating affected mofs..."
+                foreach( $server in $($allServers | Where-Object dsc_config -eq $config) )
+                {
+                    Write-Verbose "Removing outdated mof file for $($server.nodeName) - $($server.uuid)"
+                    
+                    RemoveMof -uuid $($server.uuid) -MofPath $mofDestPath
+                }
 
-            Set-Content -Path $confHash -Value (Get-FileHash -Path $confFile | ConvertTo-Csv)
+                Write-Verbose "Generating new checksum for $confFile"
+                Set-Content -Path $confHash -Value (Get-FileHash -Path $confFile).hash
+            }
+        }
+        else
+        {
+            # A bit of checksum house keeping 
+            if ( Test-Path $confHash )
+            {
+                Write-Verbose "Removing $confHash"
+                Remove-Item -Path $confHash -Force
+            }
         }
     }
 
     # Generate new or replace outdated mof and checksum files
     foreach( $server in $allServers )
     {
+        $srvname = $server.NodeName
+        $confFile = Join-Path $configPath $server.dsc_config
         $mofFile = (($mofDestPath,$server.uuid -join '\'),'mof' -join '.')
         $mofFileHash = ($mofFile,'checksum' -join '.')
 
-        if( !(Test-Path $MofFile) -or !(Test-Path $MofFileHash) )
+        if (Test-Path $confFile)
         {
-            RemoveMof -uuid $($server.uuid) -MofPath $mofDestPath
-            if( Test-Path $confFile )
+            if( !(Test-Path $MofFile) -or !(Test-Path $MofFileHash) -or !(TestHash -file $mofFile -hash $mofFileHash))
             {
+                
                 try
                 {
-                   Invoke-Expression "$($confFile) -Node $($server.NodeName) -Objectuuid $($server.uuid)"
+                    Write-Verbose "Recreating mofs for $srvname"
+                    RemoveMof -uuid $($server.uuid) -MofPath $mofDestPath
+                    
+                    Write-Verbose "Calling $confFile `n $server.NodeName `n $server.uuid"
+                    
+                    Invoke-Expression "$($confFile) -Node $($server.NodeName) -Objectuuid $($server.uuid)"
                 }
                 catch 
                 {
-                   Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "Error creating mof for $($server.NodeName) using $confFile `n$($_.Exception.message)"
+                    Write-Verbose "Error creating mof for $($server.NodeName) using $confFile `n$($_.Exception.message)"
+                    #Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "Error creating mof for $($server.NodeName) using $confFile `n$($_.Exception.message)"
                 }
             }
-            else 
-            {
-                Write-Verbose "$confFile was not found. Creation of mof file for $($server.NodeName) has failed."
-                Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1003 -Message "$confFile was not found. Creation of mof file for $($server.NodeName) has failed."
-            }
+        }
+        else
+        {
+            # Remove left-over mofs for any servers with missing dsc configuration
+            Write-Verbose "WARNING: $srvname dsc configuration file not found - $confFile"
+            RemoveMof -uuid $($server.uuid) -MofPath $mofDestPath
         }
     }
 }
@@ -188,19 +214,13 @@ function Test-TargetResource
         [ValidateSet("Present", "Absent")][string]$Ensure = "Present"
     )
     
-    Import-Module rsCommon
-    $logSource = $($PSCmdlet.MyInvocation.MyCommand.ModuleName)
-    New-rsEventLogSource -logSource $logSource
+    #Import-Module rsCommon
+    #$logsource = 'rsMofs'
+    #$logSource = $($PSCmdlet.MyInvocation.MyCommand.ModuleName)
+    #New-rsEventLogSource -logSource $logSource
     
     # Retreive current node data
     $allServers = (ReadNodeData -NodeData $nodeData).Nodes
-    
-    # Check if mof destination file count is equal to the number of nodes in NodeData
-    if($allServers.uuid.count -ne (((Get-ChildItem $mofDestPath).count)/2))
-    {
-        Write-Verbose "Number of nodes in supplied NodeData does not match number of mof or checksum files"
-        return $false
-    }
     
     # Check configurations for updates by comparing each config file and its hash
     $configs = ($allServers.dsc_config | Where-Object dsc_config -ne $pullConfig | Sort -Unique)
@@ -208,42 +228,65 @@ function Test-TargetResource
     foreach( $config in $configs )
     {
         $confFile = Join-Path $configPath $config
-        if ($configHashPath)
+        
+        if (Test-Path $confFile)
         {
-            $confHash = Join-Path $configHashPath $($config,'checksum' -join '.')
+            if ($configHashPath)
+            {
+                $confHash = Join-Path $configHashPath $($config,'checksum' -join '.')
+            }
+            else
+            {
+                $confHash = Join-Path $configPath $($config,'checksum' -join '.')
+            }
+
+            if( !(TestHash $confFile $confHash))
+            {
+                 Write-Verbose "$confFile hash check failed"
+                 return $false
+            }
         }
         else
         {
-            $confHash = Join-Path $configPath $($config,'checksum' -join '.')
-        }
-        
-
-        if( !(TestHash $confFile $confHash))
-        {
-             Write-Verbose "$confFile hash check failed"
-             return $false
+            Write-Verbose "WARNING: A configuration file referenced in $nodeData was not found - $confFile"
         }
     }
     
     # Check if each node has a mof and checksum present
-    # Then ensure that mof file is valid by comparing with its checksum
-    foreach($node in $allServers)
+    foreach($server in $allServers)
     {
-        $nodeMofFile = ((Join-Path $mofDestPath $($node.uuid)),'mof' -join '.')
-        $nodeMofHash = ((Join-Path $mofDestPath $($node.uuid)),'mof.checksum' -join '.')
+        $srvname = $server.NodeName
+        $confFile = Join-Path $configPath $($server.dsc_config)
+        $serverMofFile = ((Join-Path $mofDestPath $($server.uuid)),'mof' -join '.')
+        $serverMofHash = ($serverMofFile,'checksum' -join '.')
 
-        if( !(Test-Path $nodeMofFile) -or !(Test-Path $nodeMofHash))
+        # Skip servers that do not have a valid config defined
+        if (Test-Path $confFile)
         {
-            Write-Verbose "$nodeMofFile or its hash file not found"
-            return $false
+            if( !(Test-Path $serverMofFile) -or !(Test-Path $serverMofHash))
+            {
+                Write-Verbose "$serverMofFile or its hash file not found"
+                return $false
+            }
+
+            if( !(TestHash -file $serverMofFile -hash $serverMofHash))
+            {
+                Write-Verbose "$serverMofFile hash validaton failed"
+                return $false
+            }
         }
-
-        if( !(TestHash -file $nodeMofFile -hash $nodeMofHash))
+        else
         {
-            Write-Verbose "$nodeMofFile hash validaton failed"
-            return $false
+            Write-Verbose "WARNING: $srvname is missing its configuration file"
+            
+            # Ensure that any invalid mofs are removed
+            if ( (Test-path $serverMofFile) -or (Test-Path $serverMofHash) )
+            {
+                return $false
+            }
         }
     }
+
     return $true
 }
 
