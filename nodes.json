@@ -1,0 +1,67 @@
+{
+    "Nodes": [
+        {
+            "NodeName" :"web01",
+            "uuid":"bbd6b4ac-7faf-48bc-acfb-ee79064d924f",
+            "Role":"web",
+            "dsc_config":"testfarm.ps1",
+            "NetInterface": [
+                {
+                    "name":"public0",
+                    "address": [
+                        "120.7.2.3"
+                    ]
+                },
+                {
+                    "name":"private0",
+                    "address":[
+                        "10.181.201.118",
+                        "10.181.201.12"
+                    ]
+                }
+            ]
+            
+        },
+        {
+            "NodeName" : "web02",
+            "uuid":"51f4b526-314f-485a-a20e-46d9555c4c41",
+            "Role":"web",
+            "dsc_config":"testfarm.ps1",
+            "NetInterface": [
+                {
+                    "name":"public0",
+                    "address": [
+                        "120.7.2.4"
+                    ]
+                },
+                {
+                    "name": "private0",
+                    "address": [
+                        "10.181.201.119"
+                    ]
+                },
+                {
+                    "name": "private1",
+                    "address": [
+                        "10.181.1.13",
+                        "10.181.1.14"
+                    ]
+                }
+            ]
+        }
+    ],
+    "Services": [
+        {
+            "ServiceName":"AppService",
+            "listenIP":"10.181.3.5",
+            "listenPort":"8080",
+            "Protocol":"TCP"
+        },
+        {
+            "ServiceName":"PROD-MSSQL",
+            "listenIP":"10.181.3.65",
+            "listenPort":"1433",
+            "Protocol":"TCP"
+        }
+    ]
+}

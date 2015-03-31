@@ -1,6 +1,6 @@
 @{
 # Version number of this module.
-ModuleVersion = '1.1'
+ModuleVersion = '2.0'
 
 # ID used to uniquely identify this module
 GUID = '52ae92b7-4820-418a-b731-6088a491571e'
@@ -12,10 +12,10 @@ Author = 'Rackspace'
 CompanyName = 'Rackspace'
 
 # Copyright statement for this module
-Copyright = '(c) 2014 Rackspace. All rights reserved.'
+Copyright = '(c) 2015 Rackspace. All rights reserved.'
 
 # Description of the functionality provided by this module
-Description = 'Module with DSC Resources for rsWPI area'
+Description = 'DSC Module to automaticaly generate MOF files for pull clients'
 
 # Minimum version of the Windows PowerShell engine required by this module
 PowerShellVersion = '4.0'
