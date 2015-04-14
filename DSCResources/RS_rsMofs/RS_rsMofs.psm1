@@ -73,9 +73,11 @@ function scavengeMofs {
   )
   $existingMofs = enumMofs -MofPath $MofPath
   $allServers = (ReadNodeData -NodeData $nodeData).Nodes
-  foreach($mof in $existingMofs) {
-    if($allServers.uuid -notcontains $mof) {
-      RemoveMof -uuid $mof -MofPath $MofPath
+  if($existingMofs) {
+    foreach($mof in $existingMofs) {
+      if($allServers.uuid -notcontains $mof) {
+        RemoveMof -uuid $mof -MofPath $MofPath
+      }
     }
   }
 }
