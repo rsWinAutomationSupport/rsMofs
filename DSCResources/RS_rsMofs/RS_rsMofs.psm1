@@ -221,7 +221,8 @@ function Test-TargetResource
     
   # Retreive current node data
   $allServers = (ReadNodeData -NodeData $nodeData).Nodes
-
+  $exclusions = $allServers.uuid | ForEach-Object { $_,"mof" -join ".";$_,"mof.checksum" -join "."}
+  $removalList = Get-ChildItem $mofDestPath -Exclude $exclusions
   
   # Check configurations for updates by comparing each config file and its hash
   $configs = ($allServers.dsc_config | Where-Object dsc_config -ne $pullConfig | Sort -Unique)
@@ -281,7 +282,7 @@ function Test-TargetResource
       Write-Verbose "WARNING: $srvname is missing its configuration file"
             
       # Ensure that any invalid mofs are removed
-      if ( (Test-path $serverMofFile) -or (Test-Path $serverMofHash) )
+      if ( (Test-path $serverMofFile) -or (Test-Path $serverMofHash) -or ($removalList))
       {
         return $false
       }
