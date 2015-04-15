@@ -58,29 +58,6 @@ function RemoveMof
     Remove-Item $MofFileHash -Force -ErrorAction SilentlyContinue
   }
 }
-
-function enumMofs {
-  param (
-    [String] $MofPath
-  )
-  return (((Get-ChildItem -Path $(Join-Path $MofPath -ChildPath '*')).Name).Replace('.mof', '').Replace('.checksum', '') | sort -Unique)
-}
-
-function scavengeMofs {
-  param (
-    [string]$MofPath,
-    [string]$NodeData
-  )
-  $existingMofs = enumMofs -MofPath $MofPath
-  $allServers = (ReadNodeData -NodeData $nodeData).Nodes
-  if($existingMofs) {
-    foreach($mof in $existingMofs) {
-      if($allServers.uuid -notcontains $mof) {
-        RemoveMof -uuid $mof -MofPath $MofPath
-      }
-    }
-  }
-}
 function Get-TargetResource
 {
   param (
@@ -141,6 +118,7 @@ function Set-TargetResource
   {
     Remove-Item -Path $removalList.FullName -Force
   }
+  
     
   # Check configurations for updates by comparing each config file and its hash
   $configs = ($allServers.dsc_config | Where-Object {$_.dsc_config -ne $pullConfig} | Sort -Unique)
@@ -244,8 +222,6 @@ function Test-TargetResource
   # Retreive current node data
   $allServers = (ReadNodeData -NodeData $nodeData).Nodes
 
-  ## Scavenge Mofs
-  scavengeMofs -MofPath $mofDestPath -NodeData $nodeData
   
   # Check configurations for updates by comparing each config file and its hash
   $configs = ($allServers.dsc_config | Where-Object dsc_config -ne $pullConfig | Sort -Unique)
