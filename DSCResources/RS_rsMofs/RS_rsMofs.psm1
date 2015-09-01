@@ -287,9 +287,11 @@ function Test-TargetResource
         return $false
       }
     }
-    if($removalList) {
-      return $false
-    }
+  }
+  
+  if($removalList) 
+  {
+    return $false
   }
 
   return $true
