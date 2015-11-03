@@ -170,7 +170,7 @@ function Set-TargetResource
                     Write-Verbose "Recreating mofs for $srvname"
                     RemoveMof -uuid $($server.uuid) -MofPath $mofDestPath
                     Write-Verbose "Calling $confFile `n $server.NodeName `n $server.uuid"                   
-                    & "$($confFile) -Node $($server.NodeName) -Objectuuid $($server.uuid)"
+                    & $confFile -Node $server.NodeName -Objectuuid $server.uuid
                 }
                 catch 
                 {
