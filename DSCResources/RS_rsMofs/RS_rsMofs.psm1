@@ -169,15 +169,12 @@ function Set-TargetResource
                 {
                     Write-Verbose "Recreating mofs for $srvname"
                     RemoveMof -uuid $($server.uuid) -MofPath $mofDestPath
-                                        
-                    Write-Verbose "Calling $confFile `n $server.NodeName `n $server.uuid"
-                                        
-                    Invoke-Expression "$($confFile) -Node $($server.NodeName) -Objectuuid $($server.uuid)"
+                    Write-Verbose "Calling $confFile `n $server.NodeName `n $server.uuid"                   
+                    & "$($confFile) -Node $($server.NodeName) -Objectuuid $($server.uuid)"
                 }
                 catch 
                 {
                     Write-Verbose "Error creating mof for $($server.NodeName) using $confFile `n$($_.Exception.message)"
-                    #Write-EventLog -LogName DevOps -Source $logSource -EntryType Error -EventId 1002 -Message "Error creating mof for $($server.NodeName) using $confFile `n$($_.Exception.message)"
                 }
             }
         }
@@ -235,7 +232,6 @@ function Test-TargetResource
             Write-Verbose "WARNING: A configuration file referenced in $nodeData was not found - $confFile"
         }
     }
-        
     # Check if each node has a mof and checksum present
     foreach($server in $allServers)
     {
@@ -273,7 +269,6 @@ function Test-TargetResource
     {
         return $false
     }
-
     return $true
 }
 
